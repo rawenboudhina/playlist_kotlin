@@ -51,4 +51,8 @@ interface PlaylistDao {
 
     @Query("SELECT deezerTrackId FROM downloaded_songs")
     fun getAllDownloadedTrackIds(): Flow<List<Long>>
+
+    // ---- Helpers ----
+    @Query("SELECT COUNT(*) FROM playlist_songs WHERE playlistId = :playlistId AND songId = :songId")
+    suspend fun hasSong(playlistId: Long, songId: Long): Int
 }

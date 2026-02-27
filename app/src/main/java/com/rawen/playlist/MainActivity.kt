@@ -1,16 +1,26 @@
 package com.rawen.playlist
 
 import android.Manifest
+import android.app.Activity
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -23,6 +33,7 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.rawen.playlist.models.Playlist
 import com.rawen.playlist.ui.*
 import com.rawen.playlist.ui.theme.PlaylistTheme
+import android.provider.MediaStore
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -117,6 +128,15 @@ fun MainScreen() {
                     android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             context.contentResolver.takePersistableUriPermission(it, takeFlags)
             viewModel.setCustomFolder(it.toString())
+        }
+    }
+
+    // Deletion launcher (scoped storage user-confirmed delete on API 30+)
+    val deleteMediaLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.loadSongs()
         }
     }
 
@@ -215,7 +235,20 @@ fun MainScreen() {
                             viewModel.playSong(song)
                         }
                     },
-                    onDeleteSong = { song -> viewModel.deleteSongFromDevice(song) },
+                    onDeleteSong = { song ->
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            val uri = Uri.parse(song.path)
+                            val pending = MediaStore.createDeleteRequest(
+                                context.contentResolver,
+                                listOf(uri)
+                            )
+                            deleteMediaLauncher.launch(
+                                IntentSenderRequest.Builder(pending.intentSender).build()
+                            )
+                        } else {
+                            viewModel.deleteSongFromDevice(song)
+                        }
+                    },
                     onCreatePlaylist = { name -> viewModel.createPlaylist(name) },
                     onDeletePlaylist = { playlist -> viewModel.deletePlaylist(playlist) },
                     onPlaylistClick = { playlist ->
@@ -308,12 +341,21 @@ fun MainScreen() {
                         color = com.rawen.playlist.ui.theme.SpotifyLightGrey
                     )
                 } else {
+                    var presentIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+                    var confirmRemoveFor by remember { mutableStateOf<Playlist?>(null) }
+                    LaunchedEffect(song.id, playlists) {
+                        presentIds = viewModel.getPlaylistIdsForSong(song.id).toSet()
+                    }
                     androidx.compose.foundation.layout.Column {
                         playlists.forEach { playlist ->
                             androidx.compose.material3.TextButton(
                                 onClick = {
-                                    viewModel.addSongToPlaylist(playlist.id, song)
-                                    songForPlaylistPicker = null
+                                    if (presentIds.contains(playlist.id)) {
+                                        confirmRemoveFor = playlist
+                                    } else {
+                                        viewModel.addSongToPlaylist(playlist.id, song)
+                                        presentIds = presentIds + playlist.id
+                                    }
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
@@ -333,10 +375,65 @@ fun MainScreen() {
                                     androidx.compose.material3.Text(
                                         text = playlist.name,
                                         color = com.rawen.playlist.ui.theme.SpotifyWhite,
-                                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge
+                                        style = androidx.compose.material3.MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.weight(1f)
                                     )
+                                    AnimatedVisibility(
+                                        visible = presentIds.contains(playlist.id),
+                                        enter = fadeIn() + scaleIn(),
+                                        exit = fadeOut() + scaleOut()
+                                    ) {
+                                        androidx.compose.material3.Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "Already in playlist",
+                                            tint = com.rawen.playlist.ui.theme.SpotifyGreen,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
                                 }
                             }
+                        }
+                        confirmRemoveFor?.let { pl ->
+                            androidx.compose.material3.AlertDialog(
+                                onDismissRequest = { confirmRemoveFor = null },
+                                title = {
+                                    androidx.compose.material3.Text(
+                                        "La chanson est déjà dans cette playlist",
+                                        color = com.rawen.playlist.ui.theme.SpotifyWhite
+                                    )
+                                },
+                                text = {
+                                    androidx.compose.material3.Text(
+                                        "Voulez-vous la retirer de \"${pl.name}\" ?",
+                                        color = com.rawen.playlist.ui.theme.SpotifyLightGrey
+                                    )
+                                },
+                                confirmButton = {
+                                    androidx.compose.material3.TextButton(
+                                        onClick = {
+                                            viewModel.removeSongFromPlaylist(pl.id, song.id)
+                                            presentIds = presentIds - pl.id
+                                            confirmRemoveFor = null
+                                        }
+                                    ) {
+                                        androidx.compose.material3.Text(
+                                            "Retirer",
+                                            color = com.rawen.playlist.ui.theme.SpotifyError
+                                        )
+                                    }
+                                },
+                                dismissButton = {
+                                    androidx.compose.material3.TextButton(
+                                        onClick = { confirmRemoveFor = null }
+                                    ) {
+                                        androidx.compose.material3.Text(
+                                            "Annuler",
+                                            color = com.rawen.playlist.ui.theme.SpotifyLightGrey
+                                        )
+                                    }
+                                },
+                                containerColor = com.rawen.playlist.ui.theme.SpotifySurface
+                            )
                         }
                     }
                 }
@@ -346,7 +443,7 @@ fun MainScreen() {
                     onClick = { songForPlaylistPicker = null }
                 ) {
                     androidx.compose.material3.Text(
-                        "Cancel",
+                        "Fermer",
                         color = com.rawen.playlist.ui.theme.SpotifyLightGrey
                     )
                 }

@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MusicViewModel : ViewModel() {
 
@@ -267,6 +268,11 @@ class MusicViewModel : ViewModel() {
         return dao.getPlaylistIdsForSong(songId)
     }
 
+    suspend fun isSongInPlaylist(playlistId: Long, songId: Long): Boolean {
+        val dao = database?.playlistDao() ?: return false
+        return dao.hasSong(playlistId, songId) > 0
+    }
+
     // ============================================================
     // DOWNLOADED SONGS
     // ============================================================
@@ -274,12 +280,9 @@ class MusicViewModel : ViewModel() {
         val dao = database?.playlistDao() ?: return
         viewModelScope.launch {
             dao.getAllDownloadedSongs().collect { songs ->
-                _downloadedSongs.value = songs
-            }
-        }
-        viewModelScope.launch {
-            dao.getAllDownloadedTrackIds().collect { ids ->
-                _downloadedTrackIds.value = ids.toSet()
+                val existing = songs.filter { File(it.localFilePath).exists() }
+                _downloadedSongs.value = existing
+                _downloadedTrackIds.value = existing.map { it.deezerTrackId }.toSet()
             }
         }
     }

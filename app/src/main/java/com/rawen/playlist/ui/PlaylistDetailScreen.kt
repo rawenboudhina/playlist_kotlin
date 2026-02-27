@@ -158,6 +158,8 @@ fun PlaylistSongItem(
     onClick: () -> Unit,
     onRemove: () -> Unit
 ) {
+    var showConfirm by remember { mutableStateOf(false) }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -218,12 +220,39 @@ fun PlaylistSongItem(
             Spacer(modifier = Modifier.width(4.dp))
         }
 
-        IconButton(onClick = onRemove) {
+        IconButton(onClick = { showConfirm = true }) {
             Icon(
                 Icons.Default.RemoveCircleOutline,
                 contentDescription = "Remove",
                 tint = SpotifyLightGrey
             )
         }
+    }
+
+    if (showConfirm) {
+        AlertDialog(
+            onDismissRequest = { showConfirm = false },
+            title = { Text("Retirer de la playlist ?", color = SpotifyWhite) },
+            text = {
+                Text(
+                    "Supprimer \"${song.title}\" de cette playlist ?",
+                    color = SpotifyLightGrey
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onRemove()
+                    showConfirm = false
+                }) {
+                    Text("Confirmer", color = SpotifyError)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirm = false }) {
+                    Text("Annuler", color = SpotifyLightGrey)
+                }
+            },
+            containerColor = SpotifySurface
+        )
     }
 }
