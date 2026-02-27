@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -60,12 +61,28 @@ dependencies {
     // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 
-    // Coil pour les images
+    // Coil for images
     implementation("io.coil-kt:coil-compose:2.5.0")
 
     // Permissions
     implementation("com.google.accompanist:accompanist-permissions:0.34.0")
     implementation(libs.androidx.compose.foundation)
+
+    // Retrofit + Gson (Deezer API)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+
+    // Room (Playlists database)
+    implementation(libs.room.runtime)
+    ksp(libs.room.compiler)
+    implementation(libs.room.ktx)
+
+    // Navigation Compose
+    implementation(libs.navigation.compose)
+
+    // Palette for dynamic color extraction from album art
+    implementation("androidx.palette:palette-ktx:1.0.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

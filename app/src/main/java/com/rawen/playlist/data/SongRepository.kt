@@ -10,7 +10,6 @@ object SongRepository {
 
     fun getSongs(context: Context, folderUri: String? = null): List<Song> {
         val folderName = if (folderUri != null) {
-            // Try to extract a folder name from the URI (e.g., from OpenDocumentTree)
             val uri = Uri.parse(folderUri)
             val path = uri.path ?: ""
             if (path.contains(":")) {
